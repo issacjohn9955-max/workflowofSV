@@ -1,0 +1,22 @@
+{
+  "kind": "synthetic",
+  "genotype_format": "dosage_tsv",
+  "genotype": "dosage.tsv",
+  "samples": "samples.tsv",
+  "groups": "groups.tsv",
+  "environments": [
+    "bio3",
+    "bio15",
+    "bio18",
+    "wind",
+    "srad"
+  ],
+  "lfmm_k": 5,
+  "permutations": 39,
+  "seed": 20261123,
+  "min_called_per_group": 3,
+  "adjust_geography": true,
+  "rda_blocked": true,
+  "alpha": 0.05,
+  "loading_z": 3
+}

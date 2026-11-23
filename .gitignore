@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+/work/
+/runs/
+/input/
+/configs/input/

@@ -1,0 +1,91 @@
+01  任务设计与交付范围
+SV–环境关联的 PC3、PC5、PC10 敏感性工作流
+2026 年 11 月 23 日
+§ 方法优先级
+LFMM2 给出每个环境对每个 SV 等位列的条件关联，适合进行全基因组候选筛选。偏 RDA 检验多个环境对群体 SV 频率剖面的联合解释力，为多变量梯度和联合响应提供证据。两者的响应、分析单位和检验目标不同，有互补性。
+§ 三组设计
+PC3、PC5、PC10 分别纳入同一个 SV PCA 的前 3、5、10 轴。每种方法内冻结样本、位点、环境、地理设置和检验规则，令比较重点落在显式 PC 数量。默认同时纳入经纬度。LFMM2 默认固定 K=5，K 是另外估计的潜因子维数。
+§ 首轮解读顺序
+可先用 PC3 作为报告基线，PC5 与 PC10 作为敏感性对照。先看设计秩、有效检验分母、校准和效应方向，再看候选集合。选择正式主模型应同时考虑结构证据、环境共线性和自由度。
+§ 运行边界
+示例数据完全虚构。实测分析以核对完毕的样本名单、分型和环境组表为入口。登记表的统计行数需要与实际基因型 ID 核对，不能直接充当入组样本量。使用来源地代表气候时，组表应说明代表坐标的依据和不确定性。
+---PAGE---
+02  原始输入、对齐和分型口径
+§ 样本与组
+样本 TSV 固定列名 sample、group。每个样本只占一行。群体或坐标组 TSV 有唯一 group，以及配置指定的五个环境列。如果启用地理调整，提供 lon、lat。如果使用限制置换，另提供 block。组表的 group 集合与样本表完全一致，两种方法共享这一冻结队列。
+§ VCF/BCF
+用 bcftools 获取各样本实测 GT。每一条多等位记录按 ALT 拆列。每个有效单倍或二倍 GT 记录 ALT 拷贝数 a 和已观测倍性 m，令个体剂量 d=2a/m。无完整 GT 的格子保留缺失。目录保存记录序号、原 ID、染色体、起终点和 REF/ALT；跨版本匹配需验参考组装与等位信息。
+§ TSV
+首列 sample，其余是唯一的二倍体 SV 等位列。只接受原始实测整数 0、1、2 与 NA。对于混合倍性的分析，采用带 GT 的 VCF/BCF 入口。原始输入全程只读。
+§ 数据范围
+本工作流读取已产出的 SV 分型。样本资格、参考版本、分析范围、分型 QC 和环境选取在分析前确定。例如此前确认要排除的配套系，通过冻结名单实现。大型队列宜估计密集矩阵和 LFMM2 所需内存，分型数据留在服务器。
+---PAGE---
+03  SV PCA 与组频率的底层原理
+§ 一次分解，三个嵌套设计
+逐等位列用观测个体计算均值与总体尺度。设 z_ij=(g_ij−均值_j)/尺度_j。中心化工作矩阵中缺失设为 0，即只对 PCA 使用该列观测均值。没有变异的列退出 PCA；原始剂量的缺失不被补写。
+§ 个体亲和矩阵
+设 Z 为 n 个体乘 M 标准化变异的矩阵。分块累加 G=Z·transpose(Z)/M，再做特征分解 G=V·Λ·transpose(V)。PC 得分为 V 的特征向量乘相应特征值的平方根。保存前十个得分及全部特征值，避免三个模型分别计算轴导致轴定义变动。符号通过最大绝对分数个体统一。
+§ 组等位频率
+每组每个 SV 频率为已观测 ALT 拷贝数之和除以已观测倍性之和。组内默认至少有 3 个实测个体。RDA 只用所有组均可估且有变异的列；LFMM2 只用所有研究个体均实测且有变异的剂量列。个体 PC 按组取均值后供 RDA 使用。
+§ 解读
+PC 可吸收祖源混杂，也可能吸收与祖源高度共线的真实环境梯度。广泛 LD、分型质量和样本范围可改变 PC，因此不以显著数最大为选模标准。三个模型用同一套当前数据生成的嵌套 PC。
+---PAGE---
+04  LFMM2 拟合、检验和校准
+§ 低秩模型
+设 Y 为个体乘 SV 的剂量矩阵，X 为标准化环境、前 k 个显式 PC 和可选地理协变量。模型用 Y≈1μ+X·B+U·V 表示环境与观测协变量效应及潜在结构。LEA 用带岭正则的解析分解估计 K 维潜在空间，λ 固定 1e−5。每个 PC 规格在同样 K 下重新估计 U。
+§ 位点回归
+对每个列 y_j 用设计 [1,X,U] 做线性回归。程序按变异分块复用 QR 分解，得到环境系数、标准误与带符号 t 值。检验某一环境系数等于零时调整其他环境、显式 PC、地理项和 U。效应单位为环境增加 1 SD 对预期剂量的变化。
+§ 基因组控制和 BH
+对每个环境用 median(t^2)/median(chi-square(1)) 估计膨胀因子 λGC，按 t^2/λGC 的一自由度卡方 尾概率求校准 P，并在当前 PC 模型与环境的有效位点内做 BH。同步保存名义 t 检验 P、校准 P、q、有效分母及退化状态。GC 因子受真实多基因信号和残余结构影响。
+§ 共享环境与诊断
+多个个体共享一组环境值。个体数表示分型观察数，有效环境独立信息取决于组设计。当前 LFMM2 使用标准个体回归诊断；空间共变或组内相关需要进一步通过相应设计检查。对主候选应核查组覆盖、效应方向和其他模型的支持。
+---PAGE---
+05  偏 RDA 和置换推断
+§ 回归与排序
+设 Y 为坐标组乘 SV 的标准化等位频率矩阵，X 为五个环境，C 为显式 PC 与可选经纬度。vegan 先从 Y、X 去掉 C 的线性成分，再将剩余 Y 投影到剩余 X 的张成空间。对拟合分量做奇异值分解，得到环境约束轴、惯量、组坐标与位点载荷。
+§ 置换对象
+以坐标组为单位，使用 reduced 模型置换去除条件项后的响应残差。报告整体伪 F 与置换 P、环境边际检验和约束轴检验。默认 999 次；每个 PC 规格使用同一组种子、组顺序和置换控制设置，并保存实际置换矩阵。
+§ 交换性与自由度
+自由置换需要组残差具有交换性。若研究设计只允许区块内交换，应先做好 block 表并开启限制置换。最小可分辨置换 P 为 1/(B+1)，其中 B 是实际置换数。对 25 组、5 环境、2 地理项，PC3、PC5、PC10 的完整模型残差自由度分别为 14、12、7。
+§ 位点探索规则
+默认整体 P<0.05 且轴 BH q<0.05 后，才在合格轴上探索绝对标准化载荷大于 3 的位点。轴通过与位点载荷极端分别报告。载荷筛选提供位点优先级，统计解释需结合独立验证。
+---PAGE---
+06  运行、续跑和版本治理
+§ Linux 环境
+Python 3.10+、numpy、pandas，R 配备 Bioconductor LEA 以及 vegan、permute、jsonlite。VCF/BCF 入口另需 bcftools。服务器可在适当环境中使用 Rscript 和 python3。SV_RSCRIPT、SV_R_LIBRARY 与 SV_PYTHON 可显式指定软件位置。
+§ 快速验证
+python3 scripts/workflow.py example/run.json runs/synthetic_demo
+bash status.sh runs/synthetic_demo
+示例有 112 个虚构个体、28 个组、160 个等位列。演示配置使用四个置换块与 39 次置换。正式配置默认 999 次，根据组设计决定交换范围。
+§ 正式启动
+复制 configs/run.template.json 后填写本地输入路径与模型设置。相对路径从配置所在目录解析。先核对 sample、group、环境、参考组装和配套系排除。
+bash start.sh CONFIG.json OUTPUT_DIRECTORY
+bash status.sh OUTPUT_DIRECTORY
+后台以 setsid 和 nohup 启动。tmux 用于观察。每轮最长 6 小时，最多 3 次尝试、间隔 60 秒。每阶段记录字节数和 SHA-256，续跑时重用已校验结果和依赖。改输入、配置、软件或代码后使用新输出目录。
+---PAGE---
+07  结果目录与查阅顺序
+§ 先看输入与范围
+prepared/settings.json 记录组数、个体数、PCA 与两方法的有效范围。individual_design.tsv 和 group_design.tsv 是逐行对齐的设计文件，pca_eigenvalues.tsv 给出 PC 方差比例。marker_catalog.tsv.gz 区分每个等位列进入哪些方法。
+§ LFMM2
+lfmm_pc3、lfmm_pc5、lfmm_pc10 中的 associations.tsv.gz 记录全量关联。discoveries.tsv 可直接筛选。diagnostics.tsv 按环境给出 GC 因子、有效检验数、自由度及显著数。方向检查读取 beta 和 statistic。q 的校正范围为单一 PC 模型与环境的有效检验家族。
+§ RDA
+rda_pc3、rda_pc5、rda_pc10 中的 global.tsv 是整体结果，axes.tsv 是约束轴惯量及校正，marginal_terms.tsv 是环境边际 P。site_scores.tsv 与 environment_arrows.tsv 可直接接绘图库。locus_loadings.tsv.gz 留存全部受检位点的载荷。
+§ PC 对比
+summary 下的 rda_comparison.tsv、lfmm_comparison.tsv 与 overlap.tsv 支持比较。LFMM2 跨 PC 的交集单位是位点×环境，RDA 为位点，方法间交集按位点提供描述性证据。空并集的 Jaccard 保存为 NA。跨 PC 取并集和跨环境筛选需要另定多重检验口径。
+---PAGE---
+08  验收、适用条件与参考资料
+§ 验收设计
+以确定性模拟队列检查 PC3、PC5、PC10 的六个模型能完整执行。核对组行和个体行对齐、同一方法的位点范围、限制置换、LEA 统计量与本流程回归的对应。结果比较重点为过程和输出一致性。
+§ 正式结果检查
+核对 PC10 的自由度并检查环境与结构的相关性。核对每个模型使用同一份方法级输入表。对 RDA，分别记录全局检验和可用于位点筛选的轴；对 LFMM2，结合 QQ、GC、P 和效应复核支持。测试完成仅表明流程可复跑。
+§ 原始方法
+Price et al. 2006. Principal components and population stratification.
+https://doi.org/10.1038/ng1847
+Caye et al. 2019. LFMM2 for genome–environment associations.
+https://doi.org/10.1093/molbev/msz008
+Forester et al. 2018. Multilocus adaptation and multivariate associations.
+https://doi.org/10.1111/mec.14584
+Benjamini and Hochberg 1995. Controlling the false discovery rate.
+https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
+vegan documentation. Permutation tests of constrained ordinations.
+https://vegandevs.github.io/vegan/reference/anova.cca.html

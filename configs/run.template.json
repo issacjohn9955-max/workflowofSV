@@ -1,0 +1,17 @@
+{
+  "kind": "observed",
+  "genotype_format": "vcf_bcf",
+  "genotype": "input/observed_sv.bcf",
+  "bcftools": "bcftools",
+  "samples": "input/samples.tsv",
+  "groups": "input/groups.tsv",
+  "environments": ["bio3", "bio15", "bio18", "wind", "srad"],
+  "lfmm_k": 5,
+  "permutations": 999,
+  "seed": 20261123,
+  "min_called_per_group": 3,
+  "adjust_geography": true,
+  "rda_blocked": false,
+  "alpha": 0.05,
+  "loading_z": 3
+}
